@@ -1,0 +1,157 @@
+/**
+ * @file firestore.rules
+ * @description Security rules for a library visit tracking application.
+ *
+ * ## Core Philosophy
+ * This ruleset implements a Role-Based Access Control (RBAC) model. There are two primary roles defined within the `/users/{userId}` documents: 'user' and 'admin'.
+ * - Standard 'users' have ownership-based access, meaning they can create and manage their own profile and create visit logs. They cannot view other users' data or system-wide logs.
+ * - 'Admins' (library staff) have elevated privileges to manage user profiles (e.g., blocking a user), view all visit logs for analytics, and manage the list of colleges.
+ *
+ * ## Data Structure
+ * The data is organized into three distinct, top-level collections to promote security and performance by avoiding nested dependencies:
+ * - `/users/{userId}`: Stores user profile data, including their role and blocked status. The document ID is the user's Firebase Auth UID.
+ * - `/colleges/{collegeId}`: A master list of academic colleges, readable by all users but writeable only by admins.
+ * - `/visitLogs/{visitLogId}`: An append-only log for users to record their library visits. This data is private and can only be listed or read by admins.
+ *
+ * ## Key Security Decisions
+ * - **Admin Privilege Check**: A user is considered an 'admin' if their own document at `/users/{request.auth.uid}` has a `role` field set to 'admin'. This requires a single `get()` call for admin checks, which is an efficient and secure pattern.
+ * - **Default Deny**: Access is denied by default. All permissions must be explicitly granted.
+ * - **No User Listing**: Regular users cannot list the `/users` collection to prevent enumeration of the user base.
+ * - **Visit Log Privacy**: Visit logs are write-only for regular users. They cannot be read, listed, or modified by their creator after submission. Only admins can access this data for reporting.
+ * - **Blocked User Restriction**: A user whose profile has `isBlocked: true` is prevented from creating new `visitLogs`.
+ *
+ * ## Denormalization for Authorization
+ * - **User Roles**: The `role` and `isBlocked` fields are stored directly on each `/users/{userId}` document. This allows security rules to make immediate authorization decisions for any user by checking their profile.
+ * - **Visit Log Ownership**: Each `/visitLogs/{visitLogId}` document contains a `userId` field. This allows the rules to enforce on `create` that a user can only log a visit for themselves (`request.resource.data.userId == request.auth.uid`) without needing slow or complex cross-collection lookups.
+ *
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Helper Functions
+    // ------------------------------------------------------------------------
+
+    /**
+     * Checks if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user is the owner of the document.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Retrieves the profile data for the currently authenticated user.
+     * Caches the result of the get() call for the duration of the request evaluation.
+     */
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    /**
+     * Checks if the currently authenticated user has the 'admin' role.
+     */
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'admin';
+    }
+
+    /**
+     * Checks if the currently authenticated user is not blocked.
+     */
+    function isNotBlocked() {
+      return isSignedIn() && getUserData().isBlocked == false;
+    }
+
+    // ------------------------------------------------------------------------
+    // Validation Functions (Prototyping Mode: Only for Auth/Integrity)
+    // ------------------------------------------------------------------------
+
+    /**
+     * Validates required fields for a user creating their own profile.
+     * Ensures the ID matches their auth UID and they cannot self-assign the admin role.
+     */
+    function isCreatingOwnProfile(userId) {
+      let data = request.resource.data;
+      return data.id == userId &&
+             data.role == 'user' &&
+             data.isBlocked == false;
+    }
+
+    /**
+     * Validates that a user is creating a visit log for themselves.
+     */
+    function isCreatingOwnVisitLog() {
+      return request.resource.data.userId == request.auth.uid;
+    }
+
+    /**
+     * Ensures critical relational fields in a VisitLog are not changed on update.
+     */
+    function isVisitLogDataImmutable() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    // ------------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------------
+
+    /**
+     * @description Manages UserProfile documents.
+     * @path /users/{userId}
+     * @allow (get) An authenticated user can read their own profile. An admin can read any profile.
+     * @deny (get) A regular user tries to read another user's profile.
+     * @allow (create) An authenticated user can create their own profile document.
+     * @deny (create) A user tries to create a profile for another user's UID.
+     * @allow (update) A user updates their own profile, or an admin updates any profile (e.g., to block a user).
+     * @deny (list) A regular user tries to list all users in the system.
+     * @principle Enforces document ownership for personal data, with an override for administrative access.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isCreatingOwnProfile(userId);
+      allow update: if (isOwner(userId) || isAdmin()) && resource != null && request.resource.data.id == userId;
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Manages the master list of academic colleges.
+     * @path /colleges/{collegeId}
+     * @allow (get, list) Any signed-in user can read the list of colleges for UI purposes (e.g., dropdowns).
+     * @deny (get, list) An unauthenticated user tries to read college data.
+     * @allow (create, update, delete) An admin can manage the college list.
+     * @deny (create, update, delete) A regular user tries to add or modify a college.
+     * @principle Provides public read access for reference data while restricting writes to administrators.
+     */
+    match /colleges/{collegeId} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Manages individual library visit logs.
+     * @path /visitLogs/{visitLogId}
+     * @allow (create) A signed-in, non-blocked user can create a visit log for themselves.
+     * @deny (create) A user with `isBlocked: true` tries to create a visit log.
+     * @allow (get, list, update, delete) An admin can read or manage any visit log for reporting and data integrity.
+     * @deny (get, list, update, delete) A regular user tries to read, list, or modify any visit logs, including their own.
+     * @principle Enforces an append-only model for users and provides full administrative access for system management and analytics.
+     */
+    match /visitLogs/{visitLogId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isNotBlocked() && isCreatingOwnVisitLog();
+      allow update: if isAdmin() && resource != null && isVisitLogDataImmutable();
+      allow delete: if isAdmin() && resource != null;
+    }
+  }
+}

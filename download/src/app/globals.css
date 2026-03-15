@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Main Theme: Blue and Gold on Dark Green */
+    --background: 120 70% 10%; /* Dark Green */
+    --foreground: 0 0% 98%; /* White */
+
+    --card: 0 0% 100%; /* White for dashboard panels */
+    --card-foreground: 120 100% 10%; /* Dark Green for text on cards */
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 120 100% 10%;
+
+    --primary: 217 91% 60%; /* Blue for overlays and primary actions */
+    --primary-foreground: 0 0% 98%; /* White text on blue */
+
+    --secondary: 0 0% 100%; /* White for inactive buttons */
+    --secondary-foreground: 120 100% 10%; /* Dark green text on white buttons */
+
+    --muted: 120 40% 30%;
+    --muted-foreground: 120 10% 60%;
+
+    --accent: 45 90% 50%; /* Gold/Yellow for active/highlighted elements */
+    --accent-foreground: 45 90% 10%; /* Dark text on gold */
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 100%; /* White search bar */
+    --ring: 45 90% 50%; /* Gold ring on focus */
+
+    /* Charts */
+    --chart-1: 0 0% 100%; /* White for bars */
+    --chart-2: 45 90% 50%;
+    --chart-3: 45 90% 50%; /* Gold for text like "Hello {name}" */
+    --chart-4: 28 95% 60%;
+    --chart-5: 280 80% 60%;
+    --chart-green: 142 76% 36%;
+    
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar-background: 120 70% 10%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 45 90% 50%;
+    --sidebar-primary-foreground: 45 90% 10%;
+    --sidebar-accent: 120 60% 30%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 120 40% 35%;
+    --sidebar-ring: 45 90% 50%;
+  }
+
+  .dark {
+    /* Keep dark theme consistent with root for this app */
+    --background: 120 70% 10%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 120 100% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 120 100% 10%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 100%;
+    --secondary-foreground: 120 100% 10%;
+    --muted: 120 40% 30%;
+    --muted-foreground: 120 10% 60%;
+    --accent: 45 90% 50%;
+    --accent-foreground: 45 90% 10%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 0 0% 90%;
+    --input: 0 0% 100%;
+    --ring: 45 90% 50%;
+    --chart-1: 0 0% 100%;
+    --chart-2: 45 90% 50%;
+    --chart-3: 45 90% 50%;
+    --chart-4: 28 95% 60%;
+    --chart-5: 280 80% 60%;
+    --chart-green: 142 71% 45%;
+    --sidebar-background: 120 70% 10%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 45 90% 50%;
+    --sidebar-primary-foreground: 45 90% 10%;
+    --sidebar-accent: 120 60% 30%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 120 40% 35%;
+    --sidebar-ring: 45 90% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .text-blue-gold {
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: hsl(var(--chart-3));
+    text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.6);
+  }
+  .dashboard-title {
+    font-family: Georgia, serif;
+    font-weight: bold;
+    color: hsl(var(--chart-3));
+  }
+}
+
+@layer utilities {
+  .contact-link {
+    @apply relative py-1 transition-colors duration-300;
+  }
+  .contact-link::after {
+    content: '';
+    @apply absolute bottom-0 left-0 h-[1px] w-full origin-bottom-right scale-x-0 bg-current transition-transform duration-300 ease-out;
+  }
+  .contact-link:hover::after {
+    @apply origin-bottom-left scale-x-100;
+  }
+}
